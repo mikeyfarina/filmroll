@@ -10,18 +10,19 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 **Goal:** Working TypeScript project that can talk to ffmpeg and extract raw frames.
 
-- [ ] `npm init` with package.json (name: `dailies`, bin entry, MIT license)
-- [ ] tsconfig.json, .gitignore, LICENSE
-- [ ] Install core deps: `fluent-ffmpeg`, `@types/fluent-ffmpeg`, `pngjs`, `sharp`, `commander`
-- [ ] Install dev deps: `vitest`, `typescript`, `@types/node`
-- [ ] `src/core/ffmpeg.ts` — ffmpeg wrapper:
+- [x] `npm init` with package.json (name: `dailies`, bin entry, MIT license)
+- [x] tsconfig.json, .gitignore, LICENSE
+- [x] Install core deps: `sharp`, `commander` (using bun shell `$` instead of fluent-ffmpeg)
+- [x] Install dev deps: `typescript`, `bun-types`, `@biomejs/biome` (bun test instead of vitest)
+- [x] `src/core/ffmpeg.ts` — ffmpeg wrapper:
   - Validate ffmpeg is installed (friendly error: "Install with: brew install ffmpeg")
   - Get video metadata (duration, resolution, fps)
   - Extract frames at a configurable rate to a temp directory
-- [ ] `src/types.ts` — shared interfaces (ExtractOptions, ExtractResult, FrameInfo)
-- [ ] Verify: can extract raw frames from a test video to a temp dir
+  - Scene detection via ffmpeg's `select=gt(scene,threshold)` filter
+- [x] `src/types.ts` — shared interfaces (ExtractOptions, ExtractResult, FrameInfo, StrategyFn)
+- [x] Verify: can extract raw frames from a test video to a temp dir
 
-**Deps:** fluent-ffmpeg, @types/fluent-ffmpeg, pngjs, @types/pngjs, sharp, commander, typescript, vitest, @types/node
+**Deps:** sharp, commander, typescript, bun-types, @biomejs/biome
 
 ---
 
@@ -29,22 +30,18 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 **Goal:** Both frame extraction strategies working end-to-end.
 
-- [ ] `src/core/strategies/interval.ts` — fixed-interval extraction:
+- [x] `src/core/strategies/interval.ts` — fixed-interval extraction:
   - Extract one frame every N seconds (default: 2s)
   - Return list of FrameInfo objects (path + timestamp)
-- [ ] `src/core/strategies/diff.ts` — smart diff-based extraction:
-  - Extract frames at a high rate (every 0.5s)
-  - Compare consecutive frames using `pixelmatch`
-  - Keep frames where pixel diff exceeds threshold (default: 0.05)
+- [x] `src/core/strategies/diff.ts` — smart diff-based extraction:
+  - Uses ffmpeg scene detection (`select=gt(scene,threshold)`) instead of pixelmatch
   - **Fallback:** if fewer than 3 frames detected, auto-switch to interval mode
   - Clean up discarded frames from temp dir
-- [ ] Install: `pixelmatch`
-- [ ] Unit tests:
-  - Diff threshold logic (which frames to keep/discard)
-  - Interval frame timing calculation
-- [ ] Verify: diff mode extracts only visually distinct frames; falls back on static video
+- [x] `src/core/strategies/frames.ts` — shared frame file listing & FrameInfo builder
+- [x] Unit tests: `tests/ffmpeg.test.ts`, `tests/interval.test.ts`
+- [x] Verify: diff mode extracts only visually distinct frames; falls back on static video
 
-**Deps:** pixelmatch
+**Deps:** none (uses ffmpeg scene detection instead of pixelmatch)
 
 ---
 
@@ -52,44 +49,57 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 **Goal:** Trim/resize support, both output formats (individual images + grid).
 
-- [ ] `src/core/preprocessor.ts` — video preprocessing:
-  - Trim: pass `--start` / `--end` to ffmpeg's `-ss` and `-to`
-  - Resize: pass `--width` to ffmpeg's scale filter (maintains aspect ratio)
-- [ ] `src/core/output/individual.ts` — individual image output:
+- [x] `src/core/preprocessor.ts` — build ffmpeg flags for trim/resize:
+  - Trim: build `-ss` and `-t` args from `--start` / `--end` options
+  - Resize: build `-vf scale=W:-1` filter from `--width` option
+  - Validates `end > start` (throws on invalid range)
+  - Pass flags into existing `extractFrames` / `extractSceneFrames` calls via `PreprocessArgs`
+- [x] `src/core/output/individual.ts` — individual image output:
   - Rename frames with timestamp-based names: `frame_00m05s.png`
   - When `--max-frames` is set, select evenly spaced frames from full set
-- [ ] `src/core/output/grid.ts` — contact sheet grid:
+  - Handles duplicate timestamps with `_1`, `_2` suffixes
+  - Deletes unselected frames from disk
+- [x] `src/core/output/grid.ts` — contact sheet grid:
   - Use `sharp` to composite frames into an NxM grid
   - Auto-calculate dimensions (√n rounded)
   - Small padding/border between frames
-- [ ] Unit tests:
-  - Timestamp formatting
-  - Max-frames even-spacing logic
-  - Grid dimension calculation
+  - Empty input guard (returns early instead of crashing)
+- [x] Unit tests: `tests/output.test.ts`
+  - Timestamp formatting, max-frames even-spacing logic, grid dimension calculation
+  - Preprocessor args building (including invalid range validation)
+- [x] Hardened `src/core/ffmpeg.ts`:
+  - `parseFps` rejects zero/negative numerator (prevents downstream division-by-zero)
+  - `getVideoMetadata` wraps ffprobe call in try/catch with clear error
+  - Duration validation requires `> 0` (rejects zero-length/corrupt videos)
+  - `extractFrames` validates `intervalSeconds > 0` and checks ffmpeg exit code
+  - `parseVideoStream` rejects missing/invalid width/height instead of defaulting to 0
+- [x] Unit tests: `tests/ffmpeg.test.ts`
+  - `parseFps` edge cases (zero, negative, non-numeric, missing parts)
+  - `extractFrames` validation (zero/negative interval)
 - [ ] Verify: trimmed/resized frames output correctly; grid image looks right
 
 ---
 
 ## Phase 4: Core Orchestrator & CLI
 
-**Goal:** Working CLI tool users can run with `npx dailies input.mp4`.
+**Goal:** Working CLI tool users can run with `bun run dev input.mp4` (or `dailies` after build).
 
-- [ ] `src/core/extractor.ts` — orchestrator:
+- [x] `src/core/extractor.ts` — orchestrator:
   - Wire together: preprocess → strategy → output
   - `extract(inputPath, options) → ExtractResult`
   - Progress callback for CLI progress bar
-- [ ] `src/index.ts` — public API re-export
-- [ ] `src/cli/index.ts` — CLI with commander:
+- [x] `src/index.ts` — public API re-export
+- [x] `src/cli/index.ts` — CLI with commander:
   - All flags: `-o`, `-s`, `--every`, `--threshold`, `--grid`, `--individual`, `--start`, `--end`, `--width`, `--format`, `--max-frames`
   - Progress bar during extraction
   - Summary line: `✓ Extracted 8 frames to ./dailies-output`
   - Friendly error messages (no ffmpeg, bad file path, corrupt video)
-- [ ] Build setup: compile TS → dist, bin entry points to compiled CLI
+- [x] Build setup: `bun build` to dist, bin entry points to compiled CLI
 - [ ] Verify end-to-end:
-  - `dailies test.mp4 -o ./out` (diff mode)
-  - `dailies test.mp4 -o ./out --strategy interval --every 2`
-  - `dailies test.mp4 -o ./out --grid --max-frames 8`
-  - `dailies test.mp4 -o ./out --start 0:02 --end 0:10 --width 800`
+  - `bun run dev test.mp4 -o ./out` (diff mode)
+  - `bun run dev test.mp4 -o ./out --strategy interval --every 2`
+  - `bun run dev test.mp4 -o ./out --grid --max-frames 8`
+  - `bun run dev test.mp4 -o ./out --start 0:02 --end 0:10 --width 800`
   - Error cases: no ffmpeg, missing file, corrupt video
 
 ---
@@ -125,7 +135,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 - [ ] Initialize git repo, create GitHub remote
 - [ ] README.md:
   - Hero section with animated GIF demo of CLI in action
-  - Install instructions (`npm install -g dailies` / `npx dailies`)
+  - Install instructions (`bun add -g dailies` / `npm install -g dailies`)
   - Usage examples for CLI and MCP server
   - ffmpeg install instructions per platform
 - [ ] CLAUDE.md for the repo
@@ -149,18 +159,19 @@ dailies/
 │   │   ├── extractor.ts          # Frame extraction orchestrator
 │   │   ├── strategies/
 │   │   │   ├── interval.ts       # Fixed-interval extraction
-│   │   │   └── diff.ts           # Smart diff-based extraction
+│   │   │   ├── diff.ts           # Smart diff-based extraction (ffmpeg scene detection)
+│   │   │   └── frames.ts         # Shared frame file listing & FrameInfo builder
 │   │   ├── output/
 │   │   │   ├── individual.ts     # Save as individual images
 │   │   │   └── grid.ts           # Generate contact sheet grid
-│   │   ├── preprocessor.ts       # Trim & resize logic
-│   │   └── ffmpeg.ts             # ffmpeg wrapper utilities
+│   │   ├── preprocessor.ts       # Build ffmpeg flags for trim & resize
+│   │   └── ffmpeg.ts             # ffmpeg/ffprobe wrapper (bun shell $)
 │   ├── index.ts                  # Public API (shared by CLI + MCP)
 │   └── types.ts                  # Shared types/interfaces
 ├── tests/
-│   ├── diff.test.ts
-│   ├── grid.test.ts
-│   └── timestamp.test.ts
+│   ├── ffmpeg.test.ts            # parseFps, extractFrames validation, parseShowInfoTimestamps tests
+│   ├── interval.test.ts          # filterFrameFiles & buildFrameInfoList tests
+│   └── output.test.ts            # formatTimestamp, selectEvenlySpaced, calculateGridDimensions, buildPreprocessArgs tests
 ├── package.json
 ├── tsconfig.json
 ├── README.md
@@ -171,7 +182,9 @@ dailies/
 
 ## Key Design Decisions
 
-- **Diff fallback:** If diff mode finds <3 meaningful frames (static video), auto-fallback to interval mode
+- **Runtime:** Bun — uses bun shell `$` for ffmpeg calls, `bun:test` for testing, biome for linting
+- **Scene detection:** ffmpeg's `select=gt(scene,threshold)` filter with showinfo — no pixelmatch dependency
+- **Diff fallback:** If scene detection finds <3 frames (static video), auto-fallback to interval mode
 - **MCP frame cap:** Default 10 frames, evenly spaced across duration — avoids overwhelming context
 - **MCP cleanup:** Temp frames deleted after base64 return by default; `keep: true` saves to `~/.dailies/`
 - **Same binary:** `dailies` runs CLI by default, `dailies --mcp` launches MCP server

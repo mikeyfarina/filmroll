@@ -56,3 +56,26 @@ export interface ExtractResult {
 	/** Strategy that was actually used (may differ from requested if fallback occurred) */
 	strategyUsed: ExtractionStrategy;
 }
+
+export interface PreprocessArgs {
+	/** Extra args to place before -i (e.g., ["-ss", "5"]) */
+	inputArgs: string[];
+	/** Extra filter fragments to append to -vf (e.g., ["scale=800:-1"]) */
+	filterFragments: string[];
+	/** Extra args to place after -i (e.g., ["-t", "8"]) */
+	outputArgs: string[];
+}
+
+export interface StrategyOptions {
+	/** Seconds between frames for interval strategy */
+	every: number;
+	/** Pixel diff threshold for diff strategy (0-1) */
+	threshold: number;
+}
+
+export type StrategyFn = (
+	videoPath: string,
+	outputDir: string,
+	options: StrategyOptions,
+	preprocess?: PreprocessArgs,
+) => Promise<FrameInfo[]>;

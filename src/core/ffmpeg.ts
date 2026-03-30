@@ -1,18 +1,18 @@
 import { $ } from "bun";
-import type { VideoMetadata } from "../types.ts";
+import type { PreprocessArgs, VideoMetadata } from "../types.ts";
 
 const DEFAULT_FPS = 30;
 
 type ParsedVideoStream = Omit<VideoMetadata, "duration">;
 
-function parseFps(frameRate: string): number {
+export function parseFps(frameRate: string): number {
 	const [numerator, denominator] = frameRate.split("/");
 	if (numerator === undefined || denominator === undefined) {
 		return DEFAULT_FPS;
 	}
 	const num = Number.parseFloat(numerator);
 	const den = Number.parseFloat(denominator);
-	if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) {
+	if (!(Number.isFinite(num) && Number.isFinite(den)) || num <= 0 || den <= 0) {
 		return DEFAULT_FPS;
 	}
 	return num / den;
@@ -51,8 +51,11 @@ function parseVideoStream(streams: unknown[]): ParsedVideoStream | undefined {
 	if (stream === undefined) {
 		return;
 	}
-	const width = extractNumber(stream, "width") ?? 0;
-	const height = extractNumber(stream, "height") ?? 0;
+	const width = extractNumber(stream, "width");
+	const height = extractNumber(stream, "height");
+	if (width === undefined || height === undefined || width <= 0 || height <= 0) {
+		return;
+	}
 	const codec = extractString(stream, "codec_name") ?? "unknown";
 	const frameRateRaw = extractString(stream, "r_frame_rate");
 	let fps = DEFAULT_FPS;
@@ -76,10 +79,15 @@ export async function validateFfmpeg(): Promise<void> {
 }
 
 export async function getVideoMetadata(videoPath: string): Promise<VideoMetadata> {
-	const result =
-		await $`ffprobe -v quiet -select_streams v:0 -print_format json -show_format -show_streams -- ${videoPath}`
-			.quiet()
-			.text();
+	let result: string;
+	try {
+		result =
+			await $`ffprobe -v quiet -select_streams v:0 -print_format json -show_format -show_streams -- ${videoPath}`
+				.quiet()
+				.text();
+	} catch (error: unknown) {
+		throw new Error(`Failed to read video file: ${videoPath}`, { cause: error });
+	}
 
 	let parsed: unknown;
 	try {
@@ -111,7 +119,7 @@ export async function getVideoMetadata(videoPath: string): Promise<VideoMetadata
 	}
 
 	const duration = Number.parseFloat(durationStr);
-	if (!Number.isFinite(duration)) {
+	if (!Number.isFinite(duration) || duration <= 0) {
 		throw new Error(`Invalid video duration "${durationStr}" in: ${videoPath}`);
 	}
 
@@ -124,11 +132,65 @@ export async function getVideoMetadata(videoPath: string): Promise<VideoMetadata
 	};
 }
 
+function resolvePreprocess(preprocess?: PreprocessArgs) {
+	return {
+		inputArgs: preprocess?.inputArgs ?? [],
+		filterFragments: preprocess?.filterFragments ?? [],
+		outputArgs: preprocess?.outputArgs ?? [],
+	};
+}
+
 export async function extractFrames(
 	videoPath: string,
 	outputDir: string,
 	intervalSeconds: number,
+	preprocess?: PreprocessArgs,
 ): Promise<void> {
-	const fpsFilter = `fps=1/${intervalSeconds}`;
-	await $`ffmpeg -y -i ${videoPath} -vf ${fpsFilter} -loglevel error -- ${outputDir}/frame_%04d.png`.quiet();
+	if (intervalSeconds <= 0) {
+		throw new Error(`intervalSeconds must be positive, got ${String(intervalSeconds)}`);
+	}
+	const { inputArgs, filterFragments, outputArgs } = resolvePreprocess(preprocess);
+	const vf = [`fps=1/${intervalSeconds}`, ...filterFragments].join(",");
+	const result =
+		await $`ffmpeg -y ${inputArgs} -i ${videoPath} ${outputArgs} -vf ${vf} -loglevel error -- ${outputDir}/frame_%04d.png`
+			.quiet()
+			.nothrow();
+	if (result.exitCode !== 0) {
+		throw new Error(`ffmpeg frame extraction failed for: ${videoPath}`);
+	}
+}
+
+export function parseShowInfoTimestamps(stderr: string): number[] {
+	const timestamps: number[] = [];
+	const regex = /pts_time:([\d.]+)/gu;
+	let match: RegExpExecArray | null;
+	while ((match = regex.exec(stderr)) !== null) {
+		if (match[1] !== undefined) {
+			const time = Number.parseFloat(match[1]);
+			if (Number.isFinite(time)) {
+				timestamps.push(time);
+			}
+		}
+	}
+	return timestamps;
+}
+
+export async function extractSceneFrames(
+	videoPath: string,
+	outputDir: string,
+	threshold: number,
+	preprocess?: PreprocessArgs,
+): Promise<number[]> {
+	const { inputArgs, filterFragments, outputArgs } = resolvePreprocess(preprocess);
+	const vf = [`select=gt(scene\\,${String(threshold)})`, ...filterFragments, "showinfo"].join(",");
+	const result =
+		await $`ffmpeg -y -nostats ${inputArgs} -i ${videoPath} ${outputArgs} -vf ${vf} -vsync vfr -- ${outputDir}/frame_%04d.png`
+			.quiet()
+			.nothrow();
+
+	if (result.exitCode !== 0) {
+		throw new Error(`ffmpeg scene detection failed for: ${videoPath}`);
+	}
+
+	return parseShowInfoTimestamps(result.stderr.toString());
 }

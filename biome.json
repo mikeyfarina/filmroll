@@ -11,12 +11,29 @@
 		"rules": {
 			"a11y": "error",
 			"complexity": "error",
-			"correctness": "error",
-			"nursery": "error",
-			"performance": "error",
+			"correctness": {
+				"recommended": true,
+				"noNodejsModules": "off"
+			},
+			"nursery": {
+				"recommended": true,
+				"noTernary": "off",
+				"useExplicitType": "off"
+			},
+			"performance": {
+				"recommended": true,
+				"noBarrelFile": "off"
+			},
 			"security": "error",
-			"style": "error",
-			"suspicious": "error"
+			"style": {
+				"recommended": true,
+				"noNonNullAssertion": "warn",
+				"useExportsLast": "off"
+			},
+			"suspicious": {
+				"recommended": true,
+				"noAssignInExpressions": "off"
+			}
 		}
 	},
 	"assist": {

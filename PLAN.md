@@ -1,8 +1,6 @@
-# dailies — Implementation Plan
+# filmroll — Implementation Plan
 
 Video-to-slideshow tool for AI review. Extracts meaningful frames from video files for Claude to analyze — as a CLI tool and MCP server.
-
-Named after the film industry term for raw footage reviewed daily by the director.
 
 ---
 
@@ -10,7 +8,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 **Goal:** Working TypeScript project that can talk to ffmpeg and extract raw frames.
 
-- [x] `npm init` with package.json (name: `dailies`, bin entry, MIT license)
+- [x] `npm init` with package.json (name: `filmroll`, bin entry, MIT license)
 - [x] tsconfig.json, .gitignore, LICENSE
 - [x] Install core deps: `sharp`, `commander` (using bun shell `$` instead of fluent-ffmpeg)
 - [x] Install dev deps: `typescript`, `bun-types`, `@biomejs/biome` (bun test instead of vitest)
@@ -82,7 +80,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 ## Phase 4: Core Orchestrator & CLI
 
-**Goal:** Working CLI tool users can run with `bun run dev input.mp4` (or `dailies` after build).
+**Goal:** Working CLI tool users can run with `bun run dev input.mp4` (or `filmroll` after build).
 
 - [x] `src/core/extractor.ts` — orchestrator:
   - Wire together: preprocess → strategy → output
@@ -92,7 +90,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 - [x] `src/cli/index.ts` — CLI with commander:
   - All flags: `-o`, `-s`, `--every`, `--threshold`, `--grid`, `--individual`, `--start`, `--end`, `--width`, `--format`, `--max-frames`
   - Progress bar during extraction
-  - Summary line: `✓ Extracted 8 frames to ./dailies-output`
+  - Summary line: `✓ Extracted 8 frames to ./filmroll-output`
   - Friendly error messages (no ffmpeg, bad file path, corrupt video)
 - [x] Build setup: `bun build` to dist, bin entry points to compiled CLI
 - [ ] Verify end-to-end:
@@ -116,7 +114,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
     - Extracts frames → reads as base64 → returns as image content blocks with prompt
     - Frames are evenly spaced across video duration by default
   - Cleanup: delete temp frames after returning by default
-  - `keep: true` option saves frames to `~/.dailies/` instead
+  - `keep: true` option saves frames to `~/.filmroll/` instead
 - [x] Wire `--mcp` flag in CLI entry point to launch MCP server instead
 - [ ] Verify:
   - Configure in Claude Code MCP settings
@@ -135,7 +133,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 - [ ] Initialize git repo, create GitHub remote
 - [ ] README.md:
   - Hero section with animated GIF demo of CLI in action
-  - Install instructions (`bun add -g dailies` / `npm install -g dailies`)
+  - Install instructions (`bun add -g filmroll` / `npm install -g filmroll`)
   - Usage examples for CLI and MCP server
   - ffmpeg install instructions per platform
 - [ ] CLAUDE.md for the repo
@@ -149,7 +147,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
 ## Architecture Reference
 
 ```
-dailies/
+filmroll/
 ├── src/
 │   ├── cli/
 │   │   └── index.ts              # CLI entry point (commander)
@@ -186,8 +184,8 @@ dailies/
 - **Scene detection:** ffmpeg's `select=gt(scene,threshold)` filter with showinfo — no pixelmatch dependency
 - **Diff fallback:** If scene detection finds <3 frames (static video), auto-fallback to interval mode
 - **MCP frame cap:** Default 10 frames, evenly spaced across duration — avoids overwhelming context
-- **MCP cleanup:** Temp frames deleted after base64 return by default; `keep: true` saves to `~/.dailies/`
-- **Same binary:** `dailies` runs CLI by default, `dailies --mcp` launches MCP server
+- **MCP cleanup:** Temp frames deleted after base64 return by default; `keep: true` saves to `~/.filmroll/`
+- **Same binary:** `filmroll` runs CLI by default, `filmroll --mcp` launches MCP server
 - **Errors:** Friendly plain-text (e.g., "ffmpeg not found. Install with: brew install ffmpeg")
 - **Platforms:** macOS + Linux only for initial release
 - **No URL/stdin support:** Local files only — keep it simple

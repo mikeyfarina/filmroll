@@ -77,13 +77,16 @@ export async function extract(
 		onProgress?.("Processing output");
 		const processed = await processOutput(frames, tempDir, options);
 
-		const finalFrames = await Promise.all(
-			processed.frames.map(async (frame) => {
-				const dest = join(options.outputDir, basename(frame.path));
-				await Bun.write(dest, Bun.file(frame.path));
-				return { ...frame, path: dest };
-			}),
-		);
+		const skipFrameCopy = options.gridOnly && processed.gridPath;
+		const finalFrames = skipFrameCopy
+			? processed.frames
+			: await Promise.all(
+					processed.frames.map(async (frame) => {
+						const dest = join(options.outputDir, basename(frame.path));
+						await Bun.write(dest, Bun.file(frame.path));
+						return { ...frame, path: dest };
+					}),
+				);
 
 		let finalGridPath: string | undefined;
 		if (processed.gridPath) {

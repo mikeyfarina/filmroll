@@ -77,8 +77,10 @@ export async function outputIndividual(
 		renames.push({ frame, newPath });
 	}
 
+	const { burnTimestamp } = await import("./label.ts");
 	return Promise.all(
 		renames.map(async ({ frame, newPath }) => {
+			await burnTimestamp(frame.path, frame.timestamp);
 			await rename(frame.path, newPath);
 			return { ...frame, path: newPath };
 		}),

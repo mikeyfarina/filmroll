@@ -19,6 +19,7 @@ interface CliOptions {
 	every: string;
 	threshold: string;
 	grid?: boolean;
+	gridOnly?: boolean;
 	start?: string;
 	end?: string;
 	width?: string;
@@ -50,7 +51,7 @@ function resolveFormat(opts: CliOptions): OutputFormat {
 		}
 		return opts.format;
 	}
-	if (opts.grid === true) {
+	if (opts.grid === true || opts.gridOnly === true) {
 		return "grid";
 	}
 	return "individual";
@@ -68,6 +69,7 @@ program
 	.option("--every <seconds>", "seconds between frames (interval strategy)", "2")
 	.option("--threshold <value>", "scene change threshold (diff strategy)", "0.3")
 	.option("--grid", "output as contact sheet grid")
+	.option("--grid-only", "output only the grid image (discard individual frames)")
 	.option("--start <time>", "start time (H:MM:SS, M:SS, or seconds)")
 	.option("--end <time>", "end time (H:MM:SS, M:SS, or seconds)")
 	.option("--width <pixels>", "resize width (maintains aspect ratio)")
@@ -96,6 +98,7 @@ program
 					start: opts.start ? parseTime(opts.start) : undefined,
 					end: opts.end ? parseTime(opts.end) : undefined,
 					width,
+					gridOnly: opts.gridOnly === true,
 				},
 				(stage) => {
 					process.stdout.write(`\r  ${stage}...`);

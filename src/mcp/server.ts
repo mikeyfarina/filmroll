@@ -84,6 +84,10 @@ const toolSchema = {
 		.boolean()
 		.optional()
 		.describe("Output as contact sheet grid instead of individual frames"),
+	gridOnly: z
+		.boolean()
+		.optional()
+		.describe("Output only the grid image, discard individual frames (implies grid)"),
 	keep: z
 		.boolean()
 		.optional()
@@ -111,7 +115,7 @@ async function handleReviewVideo(input: ReviewVideoInput) {
 		return mcpError("Error: end time must be greater than start time.");
 	}
 
-	const format: OutputFormat = input.grid ? "grid" : "individual";
+	const format: OutputFormat = input.grid || input.gridOnly ? "grid" : "individual";
 	const outputDir = resolveOutputDir(keep ?? false);
 
 	try {
@@ -125,6 +129,7 @@ async function handleReviewVideo(input: ReviewVideoInput) {
 			start: input.start,
 			end: input.end,
 			width: input.width,
+			gridOnly: input.gridOnly ?? false,
 		});
 
 		const prompt = input.prompt ?? DEFAULT_PROMPT;

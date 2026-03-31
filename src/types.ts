@@ -49,6 +49,8 @@ export interface ExtractOptions {
 	end: number | undefined;
 	/** Resize width (maintains aspect ratio) */
 	width: number | undefined;
+	/** When using grid format, only output the grid image (discard individual frames) */
+	gridOnly: boolean;
 }
 
 export interface ExtractResult {

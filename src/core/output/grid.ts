@@ -4,9 +4,10 @@ import sharp from "sharp";
 import type { FrameInfo } from "../../types.ts";
 import { selectEvenlySpaced } from "./individual.ts";
 
-const GRID_PADDING = 4;
-const GRID_BORDER = 2;
-const GRID_BACKGROUND = { r: 26, g: 26, b: 26 };
+const GRID_PADDING = 12;
+const GRID_BORDER = 12;
+const GRID_BACKGROUND = { r: 40, g: 40, b: 40 };
+const GRID_TARGET_WIDTH = 1920;
 
 export function calculateGridDimensions(n: number): { cols: number; rows: number } {
 	if (n <= 0) {
@@ -34,27 +35,35 @@ export async function outputGrid(
 	}
 
 	const firstMeta = await sharp(selected[0]?.path).metadata();
-	const cellWidth = firstMeta.width;
-	const cellHeight = firstMeta.height;
-
-	if (cellWidth === undefined || cellHeight === undefined) {
+	if (firstMeta.width === undefined || firstMeta.height === undefined) {
 		throw new Error(`Could not read dimensions from: ${selected[0]?.path}`);
 	}
 
 	const { cols, rows } = calculateGridDimensions(selected.length);
 
-	const canvasWidth = cols * cellWidth + (cols - 1) * GRID_PADDING + 2 * GRID_BORDER;
+	// Scale cells so the full grid targets GRID_TARGET_WIDTH
+	const chromeWidth = (cols - 1) * GRID_PADDING + 2 * GRID_BORDER;
+	const cellWidth = Math.round((GRID_TARGET_WIDTH - chromeWidth) / cols);
+	const cellHeight = Math.round(cellWidth * (firstMeta.height / firstMeta.width));
+
+	const canvasWidth = cols * cellWidth + chromeWidth;
 	const canvasHeight = rows * cellHeight + (rows - 1) * GRID_PADDING + 2 * GRID_BORDER;
 
-	const overlays: sharp.OverlayOptions[] = selected.map((frame, i) => {
-		const col = i % cols;
-		const row = Math.floor(i / cols);
-		return {
-			input: frame.path,
-			left: GRID_BORDER + col * (cellWidth + GRID_PADDING),
-			top: GRID_BORDER + row * (cellHeight + GRID_PADDING),
-		};
-	});
+	const { burnTimestamp } = await import("./label.ts");
+	await Promise.all(selected.map((frame) => burnTimestamp(frame.path, frame.timestamp)));
+
+	const overlays: sharp.OverlayOptions[] = await Promise.all(
+		selected.map(async (frame, i) => {
+			const col = i % cols;
+			const row = Math.floor(i / cols);
+			const buf = await sharp(frame.path).resize(cellWidth, cellHeight).png().toBuffer();
+			return {
+				input: buf,
+				left: GRID_BORDER + col * (cellWidth + GRID_PADDING),
+				top: GRID_BORDER + row * (cellHeight + GRID_PADDING),
+			};
+		}),
+	);
 
 	const gridPath = join(outputDir, "grid.png");
 

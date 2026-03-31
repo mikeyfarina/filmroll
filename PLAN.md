@@ -108,8 +108,8 @@ Named after the film industry term for raw footage reviewed daily by the directo
 
 **Goal:** Claude Code can invoke `review_video` tool to extract and review frames automatically.
 
-- [ ] Install: `@modelcontextprotocol/sdk`
-- [ ] `src/mcp/server.ts` — MCP server:
+- [x] Install: `@modelcontextprotocol/sdk`
+- [x] `src/mcp/server.ts` — MCP server:
   - Tool: `review_video`
     - Inputs: videoPath (required), prompt (optional), strategy, maxFrames (default: 10), options (threshold, start, end, width, grid, keep)
     - Default prompt: "Review this UI recording and describe what you see happening step by step."
@@ -117,7 +117,7 @@ Named after the film industry term for raw footage reviewed daily by the directo
     - Frames are evenly spaced across video duration by default
   - Cleanup: delete temp frames after returning by default
   - `keep: true` option saves frames to `~/.dailies/` instead
-- [ ] Wire `--mcp` flag in CLI entry point to launch MCP server instead
+- [x] Wire `--mcp` flag in CLI entry point to launch MCP server instead
 - [ ] Verify:
   - Configure in Claude Code MCP settings
   - Invoke `review_video` with a video path + custom prompt

@@ -73,9 +73,14 @@ export interface StrategyOptions {
 	threshold: number;
 }
 
+export interface StrategyResult {
+	frames: FrameInfo[];
+	strategyUsed: ExtractionStrategy;
+}
+
 export type StrategyFn = (
 	videoPath: string,
 	outputDir: string,
 	options: StrategyOptions,
 	preprocess?: PreprocessArgs,
-) => Promise<FrameInfo[]>;
+) => Promise<StrategyResult>;

@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { ExtractOptions, ExtractResult, FrameInfo } from "../types.ts";
+import type { ExtractOptions, ExtractResult, FrameInfo, StrategyResult } from "../types.ts";
 import { getVideoMetadata, validateFfmpeg } from "./ffmpeg.ts";
 import { outputGrid } from "./output/grid.ts";
 import { outputIndividual } from "./output/individual.ts";
@@ -11,11 +11,18 @@ import { intervalStrategy } from "./strategies/interval.ts";
 
 export type ProgressCallback = (stage: string) => void;
 
-async function extractFrames(
+function _offsetTimestamps(frames: FrameInfo[], startTime: number | undefined): FrameInfo[] {
+	if (!startTime) {
+		return frames;
+	}
+	return frames.map((f) => ({ ...f, timestamp: f.timestamp + startTime }));
+}
+
+async function _runStrategy(
 	inputPath: string,
 	tempDir: string,
 	options: ExtractOptions,
-): Promise<FrameInfo[]> {
+): Promise<StrategyResult> {
 	const preprocess = buildPreprocessArgs({
 		start: options.start,
 		end: options.end,
@@ -42,34 +49,9 @@ async function processOutput(
 ): Promise<OutputResult> {
 	if (options.format === "grid") {
 		const result = await outputGrid(frames, tempDir, options.maxFrames);
-		return {
-			frames: result.frames,
-			gridPath: result.gridPath || undefined,
-		};
+		return { frames: result.frames, gridPath: result.gridPath };
 	}
 	return { frames: await outputIndividual(frames, options.maxFrames), gridPath: undefined };
-}
-
-async function copyToOutput(
-	frames: FrameInfo[],
-	outputDir: string,
-	gridPath: string | undefined,
-): Promise<OutputResult> {
-	let finalGridPath = gridPath;
-	if (gridPath) {
-		finalGridPath = join(outputDir, "grid.png");
-		await Bun.write(finalGridPath, Bun.file(gridPath));
-	}
-
-	const finalFrames = await Promise.all(
-		frames.map(async (frame) => {
-			const dest = join(outputDir, basename(frame.path));
-			await Bun.write(dest, Bun.file(frame.path));
-			return { ...frame, path: dest };
-		}),
-	);
-
-	return { frames: finalFrames, gridPath: finalGridPath };
 }
 
 export async function extract(
@@ -86,22 +68,42 @@ export async function extract(
 	const tempDir = join(tmpdir(), `dailies-${Date.now()}`);
 	await mkdir(tempDir, { recursive: true });
 
-	onProgress?.("Extracting frames");
-	const rawFrames = await extractFrames(inputPath, tempDir, options);
+	try {
+		onProgress?.("Extracting frames");
+		const { frames: rawFrames, strategyUsed } = await _runStrategy(inputPath, tempDir, options);
+		const frames = _offsetTimestamps(rawFrames, options.start);
 
-	await mkdir(options.outputDir, { recursive: true });
+		await mkdir(options.outputDir, { recursive: true });
 
-	onProgress?.("Processing output");
-	const processed = await processOutput(rawFrames, tempDir, options);
-	const output = await copyToOutput(processed.frames, options.outputDir, processed.gridPath);
+		onProgress?.("Processing output");
+		const processed = await processOutput(frames, tempDir, options);
 
-	await rm(tempDir, { recursive: true, force: true });
+		let finalFrames: FrameInfo[];
+		let finalGridPath: string | undefined;
 
-	return {
-		frames: output.frames,
-		metadata,
-		outputDir: options.outputDir,
-		gridPath: output.gridPath,
-		strategyUsed: options.strategy,
-	};
+		if (options.format === "grid" && processed.gridPath) {
+			const dest = join(options.outputDir, "grid.png");
+			await Bun.write(dest, Bun.file(processed.gridPath));
+			finalGridPath = dest;
+			finalFrames = processed.frames;
+		} else {
+			finalFrames = await Promise.all(
+				processed.frames.map(async (frame) => {
+					const dest = join(options.outputDir, basename(frame.path));
+					await Bun.write(dest, Bun.file(frame.path));
+					return { ...frame, path: dest };
+				}),
+			);
+		}
+
+		return {
+			frames: finalFrames,
+			metadata,
+			outputDir: options.outputDir,
+			gridPath: finalGridPath,
+			strategyUsed,
+		};
+	} finally {
+		await rm(tempDir, { recursive: true, force: true });
+	}
 }

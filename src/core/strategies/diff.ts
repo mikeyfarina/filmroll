@@ -22,5 +22,8 @@ export const diffStrategy: StrategyFn = async (videoPath, outputDir, options, pr
 		);
 	}
 
-	return buildFrameInfoList(outputDir, files, (i) => timestamps[i] ?? 0);
+	return {
+		frames: buildFrameInfoList(outputDir, files, (i) => timestamps[i] ?? 0),
+		strategyUsed: "diff",
+	};
 };

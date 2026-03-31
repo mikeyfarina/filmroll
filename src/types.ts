@@ -23,6 +23,13 @@ export interface VideoMetadata {
 export type ExtractionStrategy = "diff" | "interval";
 export type OutputFormat = "individual" | "grid";
 
+export const DEFAULTS = {
+	strategy: "diff" as ExtractionStrategy,
+	every: 2,
+	threshold: 0.3,
+	maxFrames: 10,
+} as const;
+
 export interface ExtractOptions {
 	/** Output directory for extracted frames */
 	outputDir: string;

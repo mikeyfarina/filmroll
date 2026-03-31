@@ -1,19 +1,36 @@
-import { existsSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { extract } from "../core/extractor.ts";
-import type { ExtractionStrategy, ExtractResult, OutputFormat } from "../types.ts";
+import type { ExtractResult, OutputFormat } from "../types.ts";
+import { DEFAULTS } from "../types.ts";
 
 const DEFAULT_PROMPT = "Review this UI recording and describe what you see happening step by step.";
-const DEFAULT_MAX_FRAMES = 10;
+const MAX_FRAMES_LIMIT = 200;
+const MIN_INTERVAL_SECONDS = 0.1;
 
 type McpContent =
 	| { type: "text"; text: string }
 	| { type: "image"; data: string; mimeType: string };
+
+function mcpError(text: string): { content: [{ type: "text"; text: string }]; isError: true } {
+	return { content: [{ type: "text" as const, text }], isError: true };
+}
+
+async function validateVideoPath(videoPath: string): Promise<string | undefined> {
+	try {
+		const info = await stat(videoPath);
+		if (!info.isFile()) {
+			return `Error: Not a regular file: ${videoPath}`;
+		}
+	} catch {
+		return `Error: File not found: ${videoPath}`;
+	}
+	return;
+}
 
 async function buildImageContent(result: ExtractResult): Promise<McpContent[]> {
 	if (result.gridPath) {
@@ -21,86 +38,17 @@ async function buildImageContent(result: ExtractResult): Promise<McpContent[]> {
 		return [{ type: "image", data: data.toString("base64"), mimeType: "image/png" }];
 	}
 
-	const images: McpContent[] = [];
-	for (const frame of result.frames) {
-		const data = await readFile(frame.path);
-		images.push({ type: "image", data: data.toString("base64"), mimeType: "image/png" });
-	}
-	return images;
+	return Promise.all(
+		result.frames.map(async (frame) => {
+			const data = await readFile(frame.path);
+			return { type: "image" as const, data: data.toString("base64"), mimeType: "image/png" };
+		}),
+	);
 }
 
 function buildSummary(result: ExtractResult, videoPath: string): string {
 	const { frames, metadata } = result;
 	return `Extracted ${String(frames.length)} frames from ${videoPath} (${metadata.duration.toFixed(1)}s, ${String(metadata.width)}x${String(metadata.height)})`;
-}
-
-interface ReviewVideoInput {
-	videoPath: string;
-	prompt: string | undefined;
-	strategy: "diff" | "interval" | undefined;
-	maxFrames: number | undefined;
-	every: number | undefined;
-	threshold: number | undefined;
-	start: number | undefined;
-	end: number | undefined;
-	width: number | undefined;
-	grid: boolean | undefined;
-	keep: boolean | undefined;
-}
-
-function resolveOutputDir(keep: boolean): string {
-	if (keep) {
-		return join(homedir(), ".dailies", `review-${Date.now()}`);
-	}
-	return join(tmpdir(), `dailies-mcp-${Date.now()}`);
-}
-
-async function handleReviewVideo(input: ReviewVideoInput) {
-	const { videoPath, keep } = input;
-
-	if (!existsSync(videoPath)) {
-		return {
-			content: [{ type: "text" as const, text: `Error: File not found: ${videoPath}` }],
-			isError: true,
-		};
-	}
-
-	const format: OutputFormat = input.grid ? "grid" : "individual";
-	const outputDir = resolveOutputDir(keep ?? false);
-
-	try {
-		const result = await extract(videoPath, {
-			outputDir,
-			strategy: (input.strategy ?? "diff") as ExtractionStrategy,
-			every: input.every ?? 2,
-			threshold: input.threshold ?? 0.3,
-			format,
-			maxFrames: input.maxFrames ?? DEFAULT_MAX_FRAMES,
-			start: input.start,
-			end: input.end,
-			width: input.width,
-		});
-
-		const prompt = input.prompt ?? DEFAULT_PROMPT;
-		const images = await buildImageContent(result);
-		const content: McpContent[] = [
-			{ type: "text", text: prompt },
-			...images,
-			{ type: "text", text: buildSummary(result, videoPath) },
-		];
-
-		return { content };
-	} catch (error: unknown) {
-		const message = error instanceof Error ? error.message : String(error);
-		return {
-			content: [{ type: "text" as const, text: `Error: ${message}` }],
-			isError: true,
-		};
-	} finally {
-		if (!keep) {
-			await rm(outputDir, { recursive: true, force: true }).catch(() => {});
-		}
-	}
 }
 
 const toolSchema = {
@@ -111,13 +59,18 @@ const toolSchema = {
 		.number()
 		.int()
 		.positive()
+		.max(MAX_FRAMES_LIMIT)
 		.optional()
-		.describe("Maximum number of frames to return (default: 10)"),
+		.describe(
+			`Maximum number of frames to return (default: ${String(DEFAULTS.maxFrames)}, max: ${String(MAX_FRAMES_LIMIT)})`,
+		),
 	every: z
 		.number()
-		.positive()
+		.min(MIN_INTERVAL_SECONDS)
 		.optional()
-		.describe("Seconds between frames for interval strategy (default: 2)"),
+		.describe(
+			`Seconds between frames for interval strategy (default: ${String(DEFAULTS.every)}, min: ${String(MIN_INTERVAL_SECONDS)})`,
+		),
 	threshold: z
 		.number()
 		.min(0)
@@ -134,11 +87,68 @@ const toolSchema = {
 	keep: z
 		.boolean()
 		.optional()
-		.describe("Save frames to ~/.dailies/ instead of deleting after return"),
+		.describe("Save frames to ~/.filmroll/ instead of deleting after return"),
 };
 
+type ReviewVideoInput = z.infer<z.ZodObject<typeof toolSchema>>;
+
+function resolveOutputDir(keep: boolean): string {
+	if (keep) {
+		return join(homedir(), ".filmroll", `review-${Date.now()}`);
+	}
+	return join(tmpdir(), `filmroll-mcp-${Date.now()}`);
+}
+
+async function handleReviewVideo(input: ReviewVideoInput) {
+	const { videoPath, keep } = input;
+
+	const validationError = await validateVideoPath(videoPath);
+	if (validationError) {
+		return mcpError(validationError);
+	}
+
+	if (input.start !== undefined && input.end !== undefined && input.end <= input.start) {
+		return mcpError("Error: end time must be greater than start time.");
+	}
+
+	const format: OutputFormat = input.grid ? "grid" : "individual";
+	const outputDir = resolveOutputDir(keep ?? false);
+
+	try {
+		const result = await extract(videoPath, {
+			outputDir,
+			strategy: input.strategy ?? DEFAULTS.strategy,
+			every: input.every ?? DEFAULTS.every,
+			threshold: input.threshold ?? DEFAULTS.threshold,
+			format,
+			maxFrames: input.maxFrames ?? DEFAULTS.maxFrames,
+			start: input.start,
+			end: input.end,
+			width: input.width,
+		});
+
+		const prompt = input.prompt ?? DEFAULT_PROMPT;
+		const images = await buildImageContent(result);
+		const content: McpContent[] = [
+			{ type: "text", text: prompt },
+			...images,
+			{ type: "text", text: buildSummary(result, videoPath) },
+		];
+
+		return { content };
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : String(error);
+		return mcpError(`Error: ${message}`);
+	} finally {
+		if (!keep) {
+			// Best-effort cleanup — don't fail the MCP response if temp dir removal fails
+			await rm(outputDir, { recursive: true, force: true }).catch(() => {});
+		}
+	}
+}
+
 export async function startMcpServer(): Promise<void> {
-	const server = new McpServer({ name: "dailies", version: "0.1.0" });
+	const server = new McpServer({ name: "filmroll", version: "0.1.0" });
 
 	server.tool(
 		"review_video",

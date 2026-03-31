@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
-import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { Command } from "commander";
 import { extract } from "../core/extractor.ts";
-import { startMcpServer } from "../mcp/server.ts";
-import type { ExtractionStrategy, OutputFormat } from "../types.ts";
+import type { OutputFormat } from "../types.ts";
+import { parsePositiveFloat, parsePositiveInt, parseTime } from "./parse.ts";
 
+// --mcp must be intercepted before Commander parses, since MCP uses stdin/stdout
 if (process.argv.includes("--mcp")) {
+	const { startMcpServer } = await import("../mcp/server.ts");
 	await startMcpServer();
 	process.exit(0);
 }
@@ -33,46 +34,12 @@ function eprintln(message: string): void {
 	process.stderr.write(`${message}\n`);
 }
 
-function parseTime(value: string): number {
-	const parts = value.split(":");
-	if (parts.length === 3) {
-		const hours = Number.parseInt(parts[0] ?? "", 10);
-		const minutes = Number.parseInt(parts[1] ?? "", 10);
-		const seconds = Number.parseInt(parts[2] ?? "", 10);
-		if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) {
-			throw new Error(`Invalid time format: "${value}". Use H:MM:SS, M:SS, or seconds.`);
-		}
-		return hours * 3600 + minutes * 60 + seconds;
+function resolveStrategy(opts: CliOptions): "diff" | "interval" {
+	if (opts.strategy === "diff" || opts.strategy === "interval") {
+		return opts.strategy;
 	}
-	if (parts.length === 2) {
-		const minutes = Number.parseInt(parts[0] ?? "", 10);
-		const seconds = Number.parseInt(parts[1] ?? "", 10);
-		if (Number.isNaN(minutes) || Number.isNaN(seconds)) {
-			throw new Error(`Invalid time format: "${value}". Use H:MM:SS, M:SS, or seconds.`);
-		}
-		return minutes * 60 + seconds;
-	}
-	const n = Number.parseFloat(value);
-	if (Number.isNaN(n)) {
-		throw new Error(`Invalid time format: "${value}". Use H:MM:SS, M:SS, or seconds.`);
-	}
-	return n;
-}
-
-function parsePositiveFloat(value: string, name: string): number {
-	const n = Number.parseFloat(value);
-	if (Number.isNaN(n) || n <= 0) {
-		throw new Error(`--${name} must be a positive number, got "${value}".`);
-	}
-	return n;
-}
-
-function parsePositiveInt(value: string, name: string): number {
-	const n = Number.parseInt(value, 10);
-	if (Number.isNaN(n) || n <= 0) {
-		throw new Error(`--${name} must be a positive integer, got "${value}".`);
-	}
-	return n;
+	eprintln(`Error: Unknown strategy "${opts.strategy}". Use "diff" or "interval".`);
+	process.exit(1);
 }
 
 function resolveFormat(opts: CliOptions): OutputFormat {
@@ -92,11 +59,11 @@ function resolveFormat(opts: CliOptions): OutputFormat {
 const program: Command = new Command();
 
 program
-	.name("dailies")
+	.name("filmroll")
 	.description("Extract meaningful frames from video files for AI review")
 	.version("0.1.0")
 	.argument("<input>", "path to video file")
-	.option("-o, --output <dir>", "output directory", "./dailies-output")
+	.option("-o, --output <dir>", "output directory", "./filmroll-output")
 	.option("-s, --strategy <type>", "extraction strategy: diff or interval", "diff")
 	.option("--every <seconds>", "seconds between frames (interval strategy)", "2")
 	.option("--threshold <value>", "scene change threshold (diff strategy)", "0.3")
@@ -108,17 +75,7 @@ program
 	.option("--format <type>", "output format: individual or grid")
 	.action(async (input: string, opts: CliOptions) => {
 		const videoPath = resolve(input);
-		if (!existsSync(videoPath)) {
-			eprintln(`Error: File not found: ${videoPath}`);
-			process.exit(1);
-		}
-
-		const strategy = opts.strategy as ExtractionStrategy;
-		if (strategy !== "diff" && strategy !== "interval") {
-			eprintln(`Error: Unknown strategy "${strategy}". Use "diff" or "interval".`);
-			process.exit(1);
-		}
-
+		const strategy = resolveStrategy(opts);
 		const format = resolveFormat(opts);
 
 		try {

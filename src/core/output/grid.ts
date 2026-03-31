@@ -1,3 +1,4 @@
+import { unlink } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
 import type { FrameInfo } from "../../types.ts";
@@ -20,14 +21,16 @@ export async function outputGrid(
 	frames: FrameInfo[],
 	outputDir: string,
 	maxFrames?: number,
-): Promise<{ frames: FrameInfo[]; gridPath: string }> {
+): Promise<{ frames: FrameInfo[]; gridPath: string | undefined }> {
 	let selected = frames;
 	if (maxFrames !== undefined && maxFrames < frames.length) {
 		selected = selectEvenlySpaced(frames, maxFrames);
+		const kept = new Set(selected);
+		await Promise.all(frames.filter((f) => !kept.has(f)).map((f) => unlink(f.path)));
 	}
 
 	if (selected.length === 0) {
-		return { frames: selected, gridPath: "" };
+		return { frames: selected, gridPath: undefined };
 	}
 
 	const firstMeta = await sharp(selected[0]?.path).metadata();

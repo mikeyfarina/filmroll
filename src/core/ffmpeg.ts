@@ -65,15 +65,30 @@ function parseVideoStream(streams: unknown[]): ParsedVideoStream | undefined {
 	return { width, height, fps, codec };
 }
 
-export async function validateFfmpeg(): Promise<void> {
+let ffmpegValidated: Promise<void> | undefined;
+
+export function validateFfmpeg(): Promise<void> {
+	if (ffmpegValidated === undefined) {
+		ffmpegValidated = doValidateFfmpeg();
+	}
+	return ffmpegValidated;
+}
+
+export function _resetFfmpegValidation(): void {
+	ffmpegValidated = undefined;
+}
+
+async function doValidateFfmpeg(): Promise<void> {
 	try {
 		await $`ffmpeg -version`.quiet();
 	} catch (error: unknown) {
+		ffmpegValidated = undefined;
 		throw new Error("ffmpeg not found. Install with: brew install ffmpeg", { cause: error });
 	}
 	try {
 		await $`ffprobe -version`.quiet();
 	} catch (error: unknown) {
+		ffmpegValidated = undefined;
 		throw new Error("ffprobe not found. Install with: brew install ffmpeg", { cause: error });
 	}
 }
@@ -146,8 +161,10 @@ export async function extractFrames(
 	intervalSeconds: number,
 	preprocess?: PreprocessArgs,
 ): Promise<void> {
-	if (intervalSeconds <= 0) {
-		throw new Error(`intervalSeconds must be positive, got ${String(intervalSeconds)}`);
+	if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
+		throw new Error(
+			`intervalSeconds must be a finite positive number, got ${String(intervalSeconds)}`,
+		);
 	}
 	const { inputArgs, filterFragments, outputArgs } = resolvePreprocess(preprocess);
 	const vf = [`fps=1/${intervalSeconds}`, ...filterFragments].join(",");
@@ -162,7 +179,7 @@ export async function extractFrames(
 
 export function parseShowInfoTimestamps(stderr: string): number[] {
 	const timestamps: number[] = [];
-	const regex = /pts_time:([\d.]+)/gu;
+	const regex = /pts_time:([\d.]+)/g;
 	let match: RegExpExecArray | null;
 	while ((match = regex.exec(stderr)) !== null) {
 		if (match[1] !== undefined) {
@@ -181,6 +198,9 @@ export async function extractSceneFrames(
 	threshold: number,
 	preprocess?: PreprocessArgs,
 ): Promise<number[]> {
+	if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+		throw new Error(`threshold must be between 0 and 1, got ${String(threshold)}`);
+	}
 	const { inputArgs, filterFragments, outputArgs } = resolvePreprocess(preprocess);
 	const vf = [`select=gt(scene\\,${String(threshold)})`, ...filterFragments, "showinfo"].join(",");
 	const result =

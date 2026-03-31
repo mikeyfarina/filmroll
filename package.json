@@ -1,16 +1,17 @@
 {
-	"name": "dailies",
+	"name": "filmroll",
 	"version": "0.1.0",
 	"type": "module",
 	"description": "Extract meaningful frames from video files for AI review — CLI tool and MCP server",
+	"main": "dist/lib.js",
 	"module": "src/index.ts",
 	"bin": {
-		"dailies": "src/cli/index.ts"
+		"filmroll": "src/cli/index.ts"
 	},
 	"scripts": {
 		"dev": "bun run src/cli/index.ts",
 		"test": "bun test",
-		"build": "bun build src/cli/index.ts --outdir dist --target bun"
+		"build": "bun build src/cli/index.ts --outdir dist --target bun && bun build src/index.ts --outfile dist/lib.js --target bun"
 	},
 	"keywords": [
 		"video",

@@ -1,20 +1,20 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./node_modules/.bin/biome check --write --unsafe $(echo \"$CLAUDE_TOOL_OUTPUT\" | grep -oE '/[^[:space:]]+\\.(ts|tsx|js|jsx)' | head -1)",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/check-no-lint-ignores.sh"
-          }
-        ]
-      }
-    ]
-  }
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "./node_modules/.bin/biome check --write --unsafe $(echo \"$CLAUDE_TOOL_OUTPUT\" | grep -oE '/[^[:space:]]+\\.(ts|tsx|js|jsx)' | head -1)",
+						"timeout": 10
+					},
+					{
+						"type": "command",
+						"command": "bash .claude/hooks/check-no-lint-ignores.sh"
+					}
+				]
+			}
+		]
+	}
 }

@@ -4,3 +4,5 @@ dist/
 .DS_Store
 *.log
 .env
+.claude/settings.local.json
+PLAN.md

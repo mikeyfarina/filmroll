@@ -42,13 +42,13 @@ describe("parseFps", () => {
 describe("extractFrames", () => {
 	test("throws on zero intervalSeconds", () => {
 		expect(extractFrames("/fake.mp4", "/tmp", 0)).rejects.toThrow(
-			"intervalSeconds must be positive",
+			"intervalSeconds must be a finite positive number",
 		);
 	});
 
 	test("throws on negative intervalSeconds", () => {
 		expect(extractFrames("/fake.mp4", "/tmp", -1)).rejects.toThrow(
-			"intervalSeconds must be positive",
+			"intervalSeconds must be a finite positive number",
 		);
 	});
 });

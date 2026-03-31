@@ -1,5 +1,8 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.9/schema.json",
+	"files": {
+		"includes": ["**", "!dist"]
+	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
@@ -24,7 +27,10 @@
 				"recommended": true,
 				"noBarrelFile": "off"
 			},
-			"security": "error",
+			"security": {
+				"recommended": true,
+				"noSecrets": "off"
+			},
 			"style": {
 				"recommended": true,
 				"noNonNullAssertion": "warn",

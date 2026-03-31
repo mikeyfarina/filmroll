@@ -4,8 +4,12 @@ import type { FrameInfo } from "../../types.ts";
 
 export function formatTimestamp(seconds: number): string {
 	const totalSeconds = Math.round(seconds);
-	const m = Math.floor(totalSeconds / 60);
+	const h = Math.floor(totalSeconds / 3600);
+	const m = Math.floor((totalSeconds % 3600) / 60);
 	const s = totalSeconds % 60;
+	if (h > 0) {
+		return `${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}m${String(s).padStart(2, "0")}s`;
+	}
 	return `${String(m).padStart(2, "0")}m${String(s).padStart(2, "0")}s`;
 }
 

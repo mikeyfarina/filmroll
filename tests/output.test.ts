@@ -20,8 +20,16 @@ describe("formatTimestamp", () => {
 		expect(formatTimestamp(65.3)).toBe("01m05s");
 	});
 
-	test("formats large timestamps", () => {
-		expect(formatTimestamp(3661)).toBe("61m01s");
+	test("formats timestamps over an hour", () => {
+		expect(formatTimestamp(3661)).toBe("01h01m01s");
+	});
+
+	test("formats exactly one hour", () => {
+		expect(formatTimestamp(3600)).toBe("01h00m00s");
+	});
+
+	test("formats multi-hour timestamp", () => {
+		expect(formatTimestamp(5400)).toBe("01h30m00s");
 	});
 
 	test("rounds fractional seconds up", () => {

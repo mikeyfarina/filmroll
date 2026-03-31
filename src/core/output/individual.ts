@@ -1,6 +1,7 @@
 import { rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { FrameInfo } from "../../types.ts";
+import { burnTimestamp } from "./label.ts";
 
 export function formatTimestamp(seconds: number): string {
 	const totalSeconds = Math.round(seconds);
@@ -77,7 +78,6 @@ export async function outputIndividual(
 		renames.push({ frame, newPath });
 	}
 
-	const { burnTimestamp } = await import("./label.ts");
 	return Promise.all(
 		renames.map(async ({ frame, newPath }) => {
 			await burnTimestamp(frame.path, frame.timestamp);

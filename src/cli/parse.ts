@@ -43,6 +43,14 @@ export function parsePositiveFloat(value: string, name: string): number {
 	return n;
 }
 
+export function parseThreshold(value: string): number {
+	const n = Number.parseFloat(value);
+	if (!Number.isFinite(n) || n < 0 || n > 1) {
+		throw new Error(`--threshold must be a number between 0 and 1, got "${value}".`);
+	}
+	return n;
+}
+
 export function parsePositiveInt(value: string, name: string): number {
 	const n = Number.parseInt(value, 10);
 	if (!Number.isFinite(n) || n <= 0) {

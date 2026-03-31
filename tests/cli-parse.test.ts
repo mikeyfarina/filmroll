@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { parsePositiveFloat, parsePositiveInt, parseTime } from "../src/cli/parse.ts";
+import {
+	parsePositiveFloat,
+	parsePositiveInt,
+	parseThreshold,
+	parseTime,
+} from "../src/cli/parse.ts";
 
 describe("parseTime", () => {
 	test("parses raw seconds", () => {
@@ -108,5 +113,35 @@ describe("parsePositiveInt", () => {
 
 	test("throws on NaN", () => {
 		expect(() => parsePositiveInt("abc", "width")).toThrow("must be a positive integer");
+	});
+});
+
+describe("parseThreshold", () => {
+	test("parses valid threshold", () => {
+		expect(parseThreshold("0.3")).toBe(0.3);
+	});
+
+	test("accepts 0", () => {
+		expect(parseThreshold("0")).toBe(0);
+	});
+
+	test("accepts 1", () => {
+		expect(parseThreshold("1")).toBe(1);
+	});
+
+	test("accepts 0.5", () => {
+		expect(parseThreshold("0.5")).toBe(0.5);
+	});
+
+	test("throws on value above 1", () => {
+		expect(() => parseThreshold("1.5")).toThrow("must be a number between 0 and 1");
+	});
+
+	test("throws on negative value", () => {
+		expect(() => parseThreshold("-0.1")).toThrow("must be a number between 0 and 1");
+	});
+
+	test("throws on NaN", () => {
+		expect(() => parseThreshold("abc")).toThrow("must be a number between 0 and 1");
 	});
 });

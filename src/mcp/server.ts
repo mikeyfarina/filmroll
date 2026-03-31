@@ -5,11 +5,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { extract } from "../core/extractor.ts";
+import { getVideoMetadata } from "../core/ffmpeg.ts";
 import type { ExtractResult, OutputFormat } from "../types.ts";
-import { DEFAULTS } from "../types.ts";
+import { DEFAULTS, MAX_DURATION_SECONDS, MAX_FRAMES_HARD_CAP, MAX_WIDTH } from "../types.ts";
 
 const DEFAULT_PROMPT = "Review this UI recording and describe what you see happening step by step.";
-const MAX_FRAMES_LIMIT = 200;
+const MAX_FRAMES_LIMIT = MAX_FRAMES_HARD_CAP;
 const MIN_INTERVAL_SECONDS = 0.1;
 
 type McpContent =
@@ -38,12 +39,12 @@ async function buildImageContent(result: ExtractResult): Promise<McpContent[]> {
 		return [{ type: "image", data: data.toString("base64"), mimeType: "image/png" }];
 	}
 
-	return Promise.all(
-		result.frames.map(async (frame) => {
-			const data = await readFile(frame.path);
-			return { type: "image" as const, data: data.toString("base64"), mimeType: "image/png" };
-		}),
-	);
+	const images: McpContent[] = [];
+	for (const frame of result.frames) {
+		const data = await readFile(frame.path);
+		images.push({ type: "image", data: data.toString("base64"), mimeType: "image/png" });
+	}
+	return images;
 }
 
 function buildSummary(result: ExtractResult, videoPath: string): string {
@@ -79,7 +80,13 @@ const toolSchema = {
 		.describe("Scene change threshold for diff strategy (default: 0.3)"),
 	start: z.number().min(0).optional().describe("Start time in seconds"),
 	end: z.number().min(0).optional().describe("End time in seconds"),
-	width: z.number().int().positive().optional().describe("Resize width in pixels"),
+	width: z
+		.number()
+		.int()
+		.positive()
+		.max(MAX_WIDTH)
+		.optional()
+		.describe(`Resize width in pixels (max: ${String(MAX_WIDTH)})`),
 	grid: z
 		.boolean()
 		.optional()
@@ -103,18 +110,31 @@ function resolveOutputDir(keep: boolean): string {
 	return join(tmpdir(), `filmroll-mcp-${Date.now()}`);
 }
 
-async function handleReviewVideo(input: ReviewVideoInput) {
-	const { videoPath, keep } = input;
+async function validateInput(input: ReviewVideoInput): Promise<string | undefined> {
+	const pathError = await validateVideoPath(input.videoPath);
+	if (pathError) {
+		return pathError;
+	}
 
-	const validationError = await validateVideoPath(videoPath);
+	if (input.start !== undefined && input.end !== undefined && input.end <= input.start) {
+		return "Error: end time must be greater than start time.";
+	}
+
+	const metadata = await getVideoMetadata(input.videoPath);
+	if (metadata.duration > MAX_DURATION_SECONDS) {
+		return `Error: Video duration ${metadata.duration.toFixed(0)}s exceeds maximum of ${String(MAX_DURATION_SECONDS)}s (${String(MAX_DURATION_SECONDS / 3600)}h). Trim with --start/--end.`;
+	}
+
+	return;
+}
+
+async function handleReviewVideo(input: ReviewVideoInput) {
+	const validationError = await validateInput(input);
 	if (validationError) {
 		return mcpError(validationError);
 	}
 
-	if (input.start !== undefined && input.end !== undefined && input.end <= input.start) {
-		return mcpError("Error: end time must be greater than start time.");
-	}
-
+	const { videoPath, keep } = input;
 	const format: OutputFormat = input.grid || input.gridOnly ? "grid" : "individual";
 	const outputDir = resolveOutputDir(keep ?? false);
 

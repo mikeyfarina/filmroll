@@ -1,3 +1,4 @@
+import { rename } from "node:fs/promises";
 import sharp from "sharp";
 
 export function formatLabel(seconds: number): string {
@@ -6,7 +7,16 @@ export function formatLabel(seconds: number): string {
 	return `${String(m)}:${String(s).padStart(2, "0")}`;
 }
 
-function buildLabelSvg(text: string, imageWidth: number): Buffer {
+function escapeXml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&apos;");
+}
+
+export function buildLabelSvg(text: string, imageWidth: number): Buffer {
 	// Scale font size relative to image width
 	const fontSize = Math.max(14, Math.round(imageWidth * 0.035));
 	const paddingX = Math.round(fontSize * 0.6);
@@ -19,10 +29,11 @@ function buildLabelSvg(text: string, imageWidth: number): Buffer {
 	const boxWidth = textWidth + paddingX * 2;
 	const boxHeight = fontSize + paddingY * 2;
 
+	const safe = escapeXml(text);
 	const svg = `<svg width="${String(boxWidth)}" height="${String(boxHeight)}" xmlns="http://www.w3.org/2000/svg">
   <rect width="${String(boxWidth)}" height="${String(boxHeight)}" rx="4" fill="rgba(0,0,0,0.7)"/>
   <text x="${String(paddingX)}" y="${String(paddingY + fontSize * 0.82)}"
-    font-family="monospace" font-size="${String(fontSize)}" fill="white">${text}</text>
+    font-family="monospace" font-size="${String(fontSize)}" fill="white">${safe}</text>
 </svg>`;
 
 	return Buffer.from(svg);
@@ -41,7 +52,8 @@ export async function burnTimestamp(imagePath: string, seconds: number): Promise
 
 	const margin = Math.round(meta.width * 0.02);
 
-	const buf = await sharp(imagePath)
+	const tmpPath = `${imagePath}.tmp`;
+	await sharp(imagePath)
 		.composite([
 			{
 				input: svgBuf,
@@ -50,7 +62,7 @@ export async function burnTimestamp(imagePath: string, seconds: number): Promise
 			},
 		])
 		.png()
-		.toBuffer();
+		.toFile(tmpPath);
 
-	await sharp(buf).toFile(imagePath);
+	await rename(tmpPath, imagePath);
 }

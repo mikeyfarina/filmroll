@@ -30,6 +30,15 @@ export const DEFAULTS = {
 	maxFrames: 10,
 } as const;
 
+/** Absolute hard cap on frames — no code path may exceed this. */
+export const MAX_FRAMES_HARD_CAP = 50;
+
+/** Maximum resize width (8K) */
+export const MAX_WIDTH = 7680;
+
+/** Maximum video duration in seconds (2 hours) */
+export const MAX_DURATION_SECONDS = 7200;
+
 export interface ExtractOptions {
 	/** Output directory for extracted frames */
 	outputDir: string;

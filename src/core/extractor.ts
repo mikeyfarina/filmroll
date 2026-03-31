@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtractOptions, ExtractResult, FrameInfo, StrategyResult } from "../types.ts";
+import { MAX_FRAMES_HARD_CAP } from "../types.ts";
 import { getVideoMetadata, validateFfmpeg } from "./ffmpeg.ts";
 import { outputGrid } from "./output/grid.ts";
 import { outputIndividual } from "./output/individual.ts";
@@ -75,7 +76,14 @@ export async function extract(
 		await mkdir(options.outputDir, { recursive: true });
 
 		onProgress?.("Processing output");
-		const processed = await processOutput(frames, tempDir, options);
+		const effectiveMaxFrames =
+			options.maxFrames !== undefined
+				? Math.min(options.maxFrames, MAX_FRAMES_HARD_CAP)
+				: MAX_FRAMES_HARD_CAP;
+		const processed = await processOutput(frames, tempDir, {
+			...options,
+			maxFrames: effectiveMaxFrames,
+		});
 
 		const skipFrameCopy = options.gridOnly && processed.gridPath;
 		const finalFrames = skipFrameCopy

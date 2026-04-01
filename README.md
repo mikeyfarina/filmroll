@@ -1,8 +1,13 @@
 # filmroll
 
-Turn video files into frames for Claude. Extract meaningful stills from any video — using scene detection or fixed intervals — and feed them directly to Claude as visual context.
+Give Claude eyes on your videos. Extract key frames from any video using scene detection or fixed intervals — as a **CLI tool** or directly through **Claude Code via MCP**.
 
-Works as a **CLI tool** or as an **MCP server** for Claude Code.
+## Use Cases
+
+- **Review a UI recording** — scene detection grabs the frames where something actually changes, skipping idle time
+- **Debug a screen recording** — point Claude at a video and have it narrate what's happening step by step
+- **Analyze video exports** — check rendered output frame by frame for visual issues
+- **Quick video overview** — use grid mode to get a single contact sheet summarizing the whole video
 
 ## Prerequisites
 
@@ -86,7 +91,7 @@ Extracts one frame every N seconds. Simple and predictable. Use `--every` to con
 
 ## MCP Server (Claude Code)
 
-filmroll includes an MCP server that lets Claude extract and view video frames directly.
+filmroll includes an MCP server that lets Claude extract and view video frames directly. Once configured, just mention a video file in Claude Code — Claude will automatically extract the key frames and analyze them.
 
 ### Setup
 

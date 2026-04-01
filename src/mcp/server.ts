@@ -9,7 +9,20 @@ import { getVideoMetadata } from "../core/ffmpeg.ts";
 import type { ExtractResult, OutputFormat } from "../types.ts";
 import { DEFAULTS, MAX_DURATION_SECONDS, MAX_FRAMES_HARD_CAP, MAX_WIDTH } from "../types.ts";
 
-const DEFAULT_PROMPT = "Review this UI recording and describe what you see happening step by step.";
+const DEFAULT_PROMPT = "Review the extracted frames and describe what you see.";
+
+const SERVER_INSTRUCTIONS = `filmroll extracts key frames from video files for visual analysis.
+
+When to use: If the user references or provides a video file (.mp4, .mov, .webm, .avi, .mkv, .gif), use the review_video tool to extract frames and analyze the content.
+
+Strategy guidance:
+- Use "diff" (scene detection) by default. It finds visually meaningful moments and skips dead space — best for most videos.
+- Only use "interval" when the user specifically asks for regular time-based sampling (e.g., "show me a frame every 2 seconds").
+
+Output guidance:
+- Use grid: true for quick overviews or when the user wants a summary view.
+- Use individual frames (the default) when detailed analysis of each moment matters.
+- The default of 10 max frames works for most videos. For longer videos (>2 min), consider increasing to 20-30.`;
 const MAX_FRAMES_LIMIT = MAX_FRAMES_HARD_CAP;
 const MIN_INTERVAL_SECONDS = 0.1;
 
@@ -173,11 +186,15 @@ async function handleReviewVideo(input: ReviewVideoInput) {
 }
 
 export async function startMcpServer(): Promise<void> {
-	const server = new McpServer({ name: "filmroll", version: "0.1.0" });
+	const server = new McpServer({
+		name: "filmroll",
+		version: "0.1.0",
+		instructions: SERVER_INSTRUCTIONS,
+	});
 
 	server.tool(
 		"review_video",
-		"Extract frames from a video file and return them as images for review",
+		"Extract key frames from a video file and return them as images for visual analysis. Automatically finds visually meaningful moments using scene detection. Use when a user shares or references a video file.",
 		toolSchema,
 		handleReviewVideo,
 	);

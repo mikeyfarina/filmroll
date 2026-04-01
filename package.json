@@ -2,7 +2,7 @@
 	"name": "filmroll",
 	"version": "0.1.0",
 	"type": "module",
-	"description": "Extract meaningful frames from video files for AI review — CLI tool and MCP server",
+	"description": "Give Claude eyes on your videos — extract key frames via CLI or MCP server",
 	"main": "dist/lib.js",
 	"module": "src/index.ts",
 	"bin": {
